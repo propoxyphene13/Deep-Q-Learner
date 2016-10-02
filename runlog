@@ -1,0 +1,9 @@
+run 1: matched provided info; slowly built up skill; at ~1300 lost it and never really recovered. scores and steps droped to 1/10 of previous consistency
+
+run 2: modified to remove 1 layer and shorten to 1000 attempts; only really caught on around 700, but still struggled. Fell apart around 900
+
+run3: added another hidden layer, took 1.5hr to run, solved for a while then drops and retries
+
+run 4: back to std file, change epsilon decay rate to .98 from .95, solved for a while then drops exponentially for the rest of the run (target score 147 from mid 400s at least)
+
+run 5: from std, epsilon decay and gamma at .98, did drop off but not as much as any other instance
