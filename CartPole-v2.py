@@ -200,7 +200,7 @@ explore_w = .99999 # how quickly we stop exploring the network and use experienc
 min_explore = 0.03 #minimum level that we let explore_w reach
 max_episodes = 2000 #number of attempts allowed
 max_steps = 500 #max number of steps allowed in an attempt
-mem_size = #determines how much state memory we can maintain (state, reward, state', terminal)
+mem_size = #determines how much state memory we can maintain (state, reward, new state, terminal)
 
 
 
@@ -285,53 +285,98 @@ Expected_reward_q = tf.placeholder(tf.float32, [None,])
 loss = tf.reduce_sum(tf.square(filtered_Q - Expected_reward_q))
 train = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
+#env
+
+#running explore probability, reduces at the (explore_w) rate
+explore = 1.0
+
+# D is an array that contains the history up to the memory limit (mem_size)
+# Each element in the list is made up of [starting state, action, reward, ending state, done]
+D = []
+
+# Running total of reward earned in the current episode
+reward_total = 0
+
+# variables used for state plotting
+xmax = 1
+ymax = 1
+xind = 1
+yind = 3
 
 
-
-#episode attempt loop; xrange slightly faster than range
-for episode in xrange(max_episodes):
-    #for each episode:
-    # observation=initial state as we reset env
-    # reward=initialized to 0
-    # done=false until the env reports that the episode has ended
-    observation = env.reset()
-    reward = 0.0
-    done = False
+with tf.Session() as sess:
+    # initialize session and set initial Q prime weight
+    sess.run(tf.initialize_all_variables())
+    sess.run(update_q)
     
-    #step (observation/action) loop
-    for step in xrange(max_steps):
-        # penalty for failing: when done flag true and we havent reached the last step in an episode
-        # also sets observation array to 0 (zers_like just matches array shape and type)
-        if done and step +1 < max_steps:
-            reward = -5000.0
-            observation = np.zeros_like(observation)
-        
-        #take action passing observation, reward and done vars
-        action = agent.act(observation, reward, done)
-        
-        # if we reach the end of the episode, rewards
-        if done or step + 1 == max_steps:
-            #add the step to the reward array
-            running_reward.append(step)
+    # counter for the number of steps taken since the last q copy was made
+    q_step_count = 0
+    
+    #episode attempt loop; xrange slightly faster than range
+    for episode in xrange(max_episodes):
+        #for each episode:
+        # initialize state as we reset env
+        # reward total initialized to 0
+        # done - false until the env reports that the episode has ended
+        state = env.reset()
+        reward_total = 0.0
+        done = False
+
+        #step (observation/action) loop
+        for step in xrange(max_steps):
+            # increment step counter for replacing q prime
+            q_step_count += 1
             
-            #if we have added over 100 steps to reward array limit array to just the most recent 100
-            if len(running_reward) > 100:
-                running_reward = running_reward[-100:]
-        
-            # calculate the average steps reached from our list of up to 100 rewards
-            avg_reward = sum(running_reward) / float(len(running_reward))
-    
-            #display current episode, step and average reward
-            print "{} - {} - {}".format(episode, step, avg_reward)
+            # update state variables for graph
+            xmax = max(xmax, state[xind])
+            ymax = max(ymax, state[yind])
             
-            #not sure what this break is for
-            break
-        
-        # run one timestep of environment with the action passed in and observation/reward/done/info returned
-        observation, reward, done, _ = env.step(action)
-        
-    # end of step loop
-    
-#end of episode loop
-#close environment
+            #every 10 episodes we want to observe the attempt and print the current Q and Q prime
+            if episode % 10 == 0:
+                q, qp = sess.run([Q_net,Qp_net], feed_dict={prev_states: np.array([state])})
+                print "Q:{}, Q_ {}".format(q[0], qp[0])
+                print "T: {} S {}".format(q_step_count, state)
+                env.render()
+            
+            # if the running exploration probability is greater than a random value then we set action to a random choice
+            # if it is less, then we use the network to pick the action
+            if explore > random.random():
+                action = env.action_space.sample()
+            else:
+                q = sess.run(Q_net, feed_dict={prev_states: np.array([state])})[0]    #not sure why we need [0] at the end
+                action = np.argmax(q)
+                print action
+            
+            # update the running exploration probability but no less than the minimum
+            explore = max(explore * explore_w, min_explore)
+            
+            #now that we have a chosen action, take a step and record results
+            new_state, reward, done, info = env.step(action)
+            
+            # tack on reward for this step to running reward total
+            reward_total += reward
+            
+            #Save everything we just discovered into memory up to the memory limit, if we hit it drop the oldest memory
+            D.append([state, action, reward, new_state, done])
+                if len(D) > mem_size:
+                    D.pop(0); 
+            
+            #now that we saved everything about the step we just took, update the current state
+            state = new_state
+            
+            #if we failed or the episode ended break the step loop
+            if done: break
+            
+            #pull a random set of data from our memory to use in training the network
+            samples = random.sample(D, min(batch_num, len(D)))
+            print samples
+            
+            #Calculate future Q values based on the memory sample
+            
+            
+            
+        # end of step loop
+
+    #end of episode loop
+    #close environment
 env.monitor.close()
