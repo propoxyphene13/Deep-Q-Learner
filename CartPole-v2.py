@@ -12,16 +12,16 @@ import random
 #Hyperparameters
 H = 30  #network size for each layer
 H2 = 15
-H3 = 8
+H3 = 10
 batch_num = 500 #want to lears some things, but not all - balance against learning rate
 learn_rate = 0.0001 #learning rate
 gamma = 0.9995 #how much do we weight short term rewards vs long term reqards
 q_copy_count = 2000 #how many learn events do we do before copying the active q net to the q prime
-explore_w = .99994 # how quickly we stop exploring the network and use experiences instead
+explore_w = .99996 # how quickly we stop exploring the network and use experiences instead
 min_explore = 0.09 #minimum level that we let explore_w reach
 max_episodes = 2000 #number of attempts allowed
 max_steps = 500 #max number of steps allowed in an attempt
-mem_size = 250000 #determines how much state memory we can maintain (state, reward, new state, terminal)
+mem_size = 150000 #determines how much state memory we can maintain (state, reward, new state, terminal)
 
 
 
@@ -246,7 +246,7 @@ with tf.Session() as sess:
         # end of step loop
 
         #every x episodes we want to see graph of how q is doing... nothing for now
-        if episode % 100 == 0:
+        if episode % 660 == 0:
         
             teststate = [0 for x in xrange(env.observation_space.shape[0])]
             #print "S: ", teststate
