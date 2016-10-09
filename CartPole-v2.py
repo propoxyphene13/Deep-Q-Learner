@@ -267,7 +267,7 @@ print "{} - {} - prime".format(hidden_3p.get_shape(), Qp_net.get_shape())  #just
 # action used is the list of actions already taken, when one hot is used it takes the action index number and turns it into an array [wtf does it actually mean]
 actions_used = tf.placeholder(tf.int32, [None])
 action_masks = tf.one_hot(actions_used, env.action_space.n)  
-print "{} - action used placeholder".format(action_used_placeholder)
+print "{} - action used placeholder".format(actions_used)
 print "{} - action masks".format(action_masks)
 
 #i think filtered q is the list of actions taken previously with all the actions we didnt take removed 
@@ -371,12 +371,56 @@ with tf.Session() as sess:
             samples = random.sample(D, min(batch_num, len(D)))
             print samples
             
-            #Calculate future Q values based on the memory sample
+            #Extracts the new_state item list from sample data set and calculate future Q values based on the memory sample
+            new_states = [ x[3] for x in samples]
+            #For each state in the new_state list calculate values based on Q prime network(?) do it here instead of within for loop (batch in instead of single)
+            all_q_prime = sess.run(Qp_net, feed_dict={prev_states: new_states})
             
+            #create variables for looking forward and evaluating states against q prime
+            #y_ future reward guess, state_samples states from run, actions - list of actions to take, terminal - terminal counter
+            y_ = []
+            state_samples = []
+            actions = []
+            terminalcount = 0
             
+            # step through each sample pulled from memory; 
+            for index, sample_i in enumerate(samples):
+                #assign the elements of the sample to temporary cycling variables
+                state_mem, curr_action, reward, new_state, done = sample_i
+                
+                # if this sample indicates we're done then increment terminal counter
+                if done:
+                    terminalcount += 1
+                    
+                #extract the q prime we're interested in from the batch run above and get the max result
+                maxq = max(all_q_prime[index])
+                
+                #tack on the reward received plus the weighted future reward - assuming we aren't terminal
+                y_.append(reward + (gamma * maxq * not done))
+                
+                #tack on the state to the sample state list and the action to the action list
+                state_samples.append(state_mem)
+                actions.append(curr_action)
+            #end of for loop    
+            
+            #run training session based on the data pulled from the sample memory
+            sess.run([train], feed_dict={prev_states: state_samples, Expected_reward_q: y_, actions_used: actions})
+            
+            #every x steps we want to overwrite our q prime network with q
+            if q_step_count % q_copy_count == 0:
+                sess.run(update_q)
             
         # end of step loop
 
+        #every x episodes we want to see graph of how q is doing... nothing for now
+#        if episode % 100 == 0:
+             
+            
     #end of episode loop
     #close environment
 env.monitor.close()
+
+
+
+
+
