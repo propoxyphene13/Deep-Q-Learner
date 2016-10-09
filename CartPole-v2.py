@@ -4,24 +4,24 @@
 import gym
 import tensorflow as tf
 import numpy as np        #matrix/math tools
-#import nplot              #for Q plotting
+import nplot              #for Q plotting
 import random
 
     
 
 #Hyperparameters
 H = 30  #network size for each layer
-H2 = 30
-H3 = 20
-batch_num = 1000 #want to lears some things, but not all - balance against learning rate
-learn_rate = 5e-4 #1/2000 learning rate
+H2 = 15
+H3 = 8
+batch_num = 500 #want to lears some things, but not all - balance against learning rate
+learn_rate = 0.0001 #learning rate
 gamma = 0.9995 #how much do we weight short term rewards vs long term reqards
 q_copy_count = 2000 #how many learn events do we do before copying the active q net to the q prime
 explore_w = .99994 # how quickly we stop exploring the network and use experiences instead
-min_explore = 0.03 #minimum level that we let explore_w reach
+min_explore = 0.09 #minimum level that we let explore_w reach
 max_episodes = 2000 #number of attempts allowed
 max_steps = 500 #max number of steps allowed in an attempt
-mem_size = 100000 #determines how much state memory we can maintain (state, reward, new state, terminal)
+mem_size = 250000 #determines how much state memory we can maintain (state, reward, new state, terminal)
 
 
 
@@ -78,8 +78,8 @@ update_q = [w1p_up, w2p_up, w3p_up, w4p_up, b1p_up, b2p_up, b3p_up, b4p_up]
 prev_states = tf.placeholder(tf.float32, [None, env.observation_space.shape[0]])
 hidden_1 = tf.nn.relu(tf.matmul(prev_states, w1) + b1)
 hidden_2 = tf.nn.relu(tf.matmul(hidden_1, w2) + b2)
-hidden_25= tf.nn.dropout(hidden_2, .75)  #add some noise in the middle of the net
-hidden_3 = tf.nn.relu(tf.matmul(hidden_25, w3) + b3)
+#hidden_25= tf.nn.dropout(hidden_2, .75)  #add some noise in the middle of the net
+hidden_3 = tf.nn.relu(tf.matmul(hidden_2, w3) + b3)
 Q_net = tf.matmul(hidden_3, w4) + b4   #removed squeeze b/c i removed Q prime squeeze
 
 
@@ -185,7 +185,7 @@ with tf.Session() as sess:
             
             #print results episode results when done
             if done:
-                print"{} - {} - {}".format(episode, step, explore)
+                print"{} - {} - {} - {}".format(episode, step, explore, len(D))
             
             #Save everything we just discovered into memory up to the memory limit, if we hit it drop the oldest memory
             D.append([state, action, reward, new_state, done])
@@ -246,8 +246,47 @@ with tf.Session() as sess:
         # end of step loop
 
         #every x episodes we want to see graph of how q is doing... nothing for now
-#        if episode % 100 == 0:
-             
+        if episode % 100 == 0:
+        
+            teststate = [0 for x in xrange(env.observation_space.shape[0])]
+            #print "S: ", teststate
+            X=[]
+            Y=[]
+            Z=[]
+            ZR=[]
+
+            xmin = -xmax
+            xstep = xmax/100.0
+
+            ymin = -ymax
+            ystep = ymax/100.0
+
+            test_state_list = []
+            for x in nplot.drange(xmin,xmax, xstep):
+                for y in nplot.drange(ymin,ymax,ystep):
+                    teststate[xind] = x
+                    teststate[yind] = y
+                    test_state_list.append([teststate[x] for x in xrange(len(teststate))])
+
+            test_q_list = sess.run(Q_net, feed_dict={prev_states:test_state_list})
+            zmax = max(map(max,test_q_list))
+            ind = 0
+            for x in nplot.drange(xmin,xmax, xstep):
+                XX = []
+                YY = []
+                ZZ = []
+                ZZR = []
+                for y in nplot.drange(ymin,ymax,ystep):
+                    XX.append(x)
+                    YY.append(y)
+                    ZZ.append(test_q_list[ind][0])
+                    ZZR.append(test_q_list[ind][1])
+                    ind += 1
+                X.append(XX)
+                Y.append(YY)
+                Z.append(ZZ)
+                ZR.append(ZZR)
+            nplot.plot(X,Y,Z, ZR, xmin,ymax,zmax)
             
     #end of episode loop
     #close environment
