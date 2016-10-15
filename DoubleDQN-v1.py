@@ -44,8 +44,8 @@ b2 = tf.Variable(tf.random_uniform([H2], -1.0, 1.0))
 w3 = tf.Variable(tf.random_uniform([H2, H3], -1.0, 1.0))
 b3 = tf.Variable(tf.random_uniform([H3], -1.0, 1.0))
 
-w4 = tf.Variable(tf.random_uniform([H3, env.action_space_range], -1.0, 1.0))
-b4 = tf.Variable(tf.random_uniform([env.action_space_range], -1.0, 1.0))
+w4 = tf.Variable(tf.random_uniform([H3, 1], -1.0, 1.0))
+b4 = tf.Variable(tf.random_uniform([1], -1.0, 1.0))
 
 #create q' net
 w1p = tf.Variable(tf.random_uniform([env.observation_space.shape[0], H], -1.0, 1.0))
@@ -57,8 +57,8 @@ b2p = tf.Variable(tf.random_uniform([H2], -1.0, 1.0))
 w3p = tf.Variable(tf.random_uniform([H2, H3], -1.0, 1.0))
 b3p = tf.Variable(tf.random_uniform([H3], -1.0, 1.0))
 
-w4p = tf.Variable(tf.random_uniform([H3, action_space_range], -1.0, 1.0))
-b4p = tf.Variable(tf.random_uniform([env.action_space_range], -1.0, 1.0))
+w4p = tf.Variable(tf.random_uniform([H3, 1], -1.0, 1.0))
+b4p = tf.Variable(tf.random_uniform([1], -1.0, 1.0))
 
 #create pointers so that when we run a session we can direct the Q prime to update from the Q net
 #update_q = [w1p.assign(w1), w2p.assign(w2), w3p.assign(w3), w4p.assign(w4), b1p.assign(b1), b2p.assign(b2), b3p.assign(b3), b1p.assign(b4)]
@@ -78,16 +78,19 @@ update_q = [w1p_up, w2p_up, w3p_up, w4p_up, b1p_up, b2p_up, b3p_up, b4p_up]
 prev_states = tf.placeholder(tf.float32, [None, env.observation_space.shape[0]])
 hidden_1 = tf.nn.relu(tf.matmul(prev_states, w1) + b1)
 hidden_2 = tf.nn.relu(tf.matmul(hidden_1, w2) + b2)
-#hidden_25= tf.nn.dropout(hidden_2, .75)  #add some noise in the middle of the net
-hidden_3 = tf.nn.relu(tf.matmul(hidden_2, w3) + b3)
-Q_net = tf.matmul(hidden_3, w4) + b4   #removed squeeze b/c i removed Q prime squeeze
+mu_net_layer = tf.nn.max_pool(hidden_2)
+mu_net = tf.mul(mu_net_layer, action_space_range)
+hidden_3 = tf.nn.relu(tf.matmul(mu_net_layer, w3) + b3)
+Q_net_output = tf.matmul(hidden_3, w4) + b4   #removed squeeze b/c i removed Q prime squeeze
+Q_net = tf.nn.max_pool(Q_net_output)
 
-
-
+#TODO: match prime to primary config
 hidden_1p = tf.nn.relu(tf.matmul(prev_states, w1p) + b1p)
 hidden_2p = tf.nn.relu(tf.matmul(hidden_1p, w2p) + b2p)
 hidden_3p = tf.nn.relu(tf.matmul(hidden_2p, w3p) + b3p)
 Qp_net = tf.matmul(hidden_3p, w4p) + b4p     #removed squeeze b/c that was killing max below
+
+
 
 
 # used in training -come back and figure this shit out
@@ -172,8 +175,8 @@ with tf.Session() as sess:
             if explore > random.random():
                 action = env.action_space.sample()
             else:
-                q = sess.run(Q_net, feed_dict={prev_states: np.array([state])})[0]    #not sure why we need [0] at the end
-                action = np.argmax(q)
+                y, mu = sess.run([Q_net, mu_net], feed_dict={prev_states: np.array([state])})[0]    #not sure why we need [0] at the end
+                action = np.argmax(mu)
                 #print action
             
             # update the running exploration probability but no less than the minimum
@@ -207,7 +210,7 @@ with tf.Session() as sess:
             #Extracts the new_state item list from sample data set and calculate future Q values based on the memory sample
             new_states = [ x[3] for x in samples]
             #For each state in the new_state list calculate values based on Q prime network(?) do it here instead of within for loop (batch in instead of single)
-            all_q_prime = sess.run(Qp_net, feed_dict={prev_states: new_states})
+            all_q_prime, all_mu_prime = sess.run([Qp_net, mup_net], feed_dict={prev_states: new_states})
             
             #create variables for looking forward and evaluating states against q prime
             #y_ future reward guess, state_samples states from run, actions - list of actions to take, terminal - terminal counter
@@ -229,7 +232,7 @@ with tf.Session() as sess:
                 maxq = max(all_q_prime[index])
                 
                 #tack on the reward received plus the weighted future reward - assuming we aren't terminal
-                y_.append(reward + (gamma * maxq * (not done)))
+                y_.append(reward + reward*(gamma * maxq * (not done)))
                 
                 #tack on the state to the sample state list and the action to the action list
                 state_samples.append(state_mem)
