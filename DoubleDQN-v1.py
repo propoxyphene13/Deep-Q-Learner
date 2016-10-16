@@ -81,14 +81,14 @@ hidden_2 = tf.nn.relu(tf.matmul(hidden_1, w2) + b2)
 mu_net_layer = tf.nn.max_pool(hidden_2, [1, 2, 2, 1], [1, 2, 2, 1], 'SAME')
 mu_net = tf.mul(mu_net_layer, action_space_range)
 hidden_3 = tf.nn.relu(tf.matmul(mu_net_layer, w3) + b3)
-Q_net_output = tf.matmul(hidden_3, w4) + b4   #removed squeeze b/c i removed Q prime squeeze
+Q_net_output = tf.matmul(hidden_3, w4) + b4
 Q_net = tf.nn.max_pool(Q_net_output, [1, 2, 2, 1], [1, 2, 2, 1], 'SAME')
 
-#TODO: match prime to primary config
+#TODO: match prime to primary config once that one is working
 hidden_1p = tf.nn.relu(tf.matmul(prev_states, w1p) + b1p)
 hidden_2p = tf.nn.relu(tf.matmul(hidden_1p, w2p) + b2p)
 hidden_3p = tf.nn.relu(tf.matmul(hidden_2p, w3p) + b3p)
-Qp_net = tf.matmul(hidden_3p, w4p) + b4p     #removed squeeze b/c that was killing max below
+Qp_net = tf.matmul(hidden_3p, w4p) + b4p
 
 
 
@@ -97,15 +97,21 @@ Qp_net = tf.matmul(hidden_3p, w4p) + b4p     #removed squeeze b/c that was killi
 
 # env.action_space.n are the actions available for this scenario (left right up down etc.)
 # action used is the list of actions already taken, when one hot is used it takes the action index number and turns it into an array [wtf does it actually mean]
-actions_used = tf.placeholder(tf.float32, [None])
-action_masks = tf.one_hot(actions_used, action_space_range)  
+
+## Dont think i can use this type of mask and one_hot for continuous action spaces, need to revise
+##actions_used = tf.placeholder(tf.float32, [None])
+##action_masks = tf.one_hot(actions_used, action_space_range)  
 
 #i think filtered q is the list of actions taken previously with all the actions we didnt take removed 
 #  take the action masks (which indicate the actions taken up to now?) so:
 #     which consisted of [0 1; 0 1; 1 0; 0 1...] where each line in the array indicated an action (right; right; left; right)
 # and elementwise multiply with the Q network states whose result is then narrowed down to a single dimension
 # this is then the list of previous values earned from prev actions that can be used for calculating the loss??? maybe? dont quite know why still
-filtered_Q = tf.reduce_sum(tf.mul(Q_net, action_masks), reduction_indices=1) 
+
+##filtered_Q = tf.reduce_sum(tf.mul(Q_net, action_masks), reduction_indices=1) 
+## Dont think I need this (above) anymore since there is only one output instead of 2, just use the Q_net outout in the loss function
+filtered_Q = tf.squeeze(Q_net)
+
 
 #training
 # A list of expected rewards with each elementrepresenting the reward on a specific step [next action, 2nd action reward, 3ed action reward...]
@@ -114,6 +120,9 @@ filtered_Q = tf.reduce_sum(tf.mul(Q_net, action_masks), reduction_indices=1)
 Expected_reward_q = tf.placeholder(tf.float32, [None,])  
 loss = tf.reduce_sum(tf.square(filtered_Q - Expected_reward_q))
 train = tf.train.AdamOptimizer(learn_rate).minimize(loss)
+
+
+
 
 #env
 
@@ -158,7 +167,8 @@ with tf.Session() as sess:
         for step in xrange(max_steps):
             # increment step counter for replacing q prime
             q_step_count += 1
-            
+
+## remove graphing and observation sections
 ##            # update state variables for graph
 ##            xmax = max(xmax, state[xind])
 ##            ymax = max(ymax, state[yind])
@@ -175,8 +185,8 @@ with tf.Session() as sess:
             if explore > random.random():
                 action = env.action_space.sample()
             else:
-                y, mu = sess.run([Q_net, mu_net], feed_dict={prev_states: np.array([state])})[0]    #not sure why we need [0] at the end
-                action = np.random.randn(action_space_range * np.argmax(mu))
+                y, mu = sess.run([Q_net, mu_net], feed_dict={prev_states: np.array([state])})[0]
+                action = np.random.randn(action_space_range * np.argmax(mu))    #selects action from mu_network and also adds noise for training
                 #print action
             
             # update the running exploration probability but no less than the minimum
@@ -190,7 +200,8 @@ with tf.Session() as sess:
             
             #print results episode results when done
             if done:
-                print"{} - {} - {} - {}".format(episode, step, explore, len(D))
+##                print"{} - {} - {} - {}".format(episode, step, explore, len(D))
+                  print"{}".format(reward)
             
             #Save everything we just discovered into memory up to the memory limit, if we hit it drop the oldest memory
             D.append([state, action, reward, new_state, done])
@@ -229,6 +240,7 @@ with tf.Session() as sess:
                     terminalcount += 1
                     
                 #extract the q prime we're interested in from the batch run above and get the max result
+				#should this be mu prime???
                 maxq = max(all_q_prime[index])
                 
                 #tack on the reward received plus the weighted future reward - assuming we aren't terminal
