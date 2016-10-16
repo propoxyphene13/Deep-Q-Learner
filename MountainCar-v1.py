@@ -14,14 +14,14 @@ H = 50  #network size for each layer
 H2 = 50
 H3 = 25
 batch_num = 500 #want to lears some things, but not all - balance against learning rate
-learn_rate = 0.0001 #learning rate
+learn_rate = 0.001 #learning rate
 gamma = 0.995 #how much do we weight short term rewards vs long term reqards
 q_copy_count = 15 #how many learn events do we do before copying the active q net to the q prime
 explore_w = .99999 # how quickly we stop exploring the network and use experiences instead
-min_explore = 0.09 #minimum level that we let explore_w reach
+min_explore = 0.10 #minimum level that we let explore_w reach
 max_episodes = 2000 #number of attempts allowed
 max_steps = 200 #max number of steps allowed in an attempt
-mem_size = 150000 #determines how much state memory we can maintain (state, reward, new state, terminal)
+mem_size = 200000 #determines how much state memory we can maintain (state, reward, new state, terminal)
 
 
 
