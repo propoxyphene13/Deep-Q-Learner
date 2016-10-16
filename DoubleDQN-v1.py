@@ -78,11 +78,11 @@ update_q = [w1p_up, w2p_up, w3p_up, w4p_up, b1p_up, b2p_up, b3p_up, b4p_up]
 prev_states = tf.placeholder(tf.float32, [None, env.observation_space.shape[0]])
 hidden_1 = tf.nn.relu(tf.matmul(prev_states, w1) + b1)
 hidden_2 = tf.nn.relu(tf.matmul(hidden_1, w2) + b2)
-mu_net_layer = tf.nn.max_pool(hidden_2)
+mu_net_layer = tf.nn.max_pool(hidden_2, [1, 2, 2, 1], [1, 2, 2, 1], 'SAME')
 mu_net = tf.mul(mu_net_layer, action_space_range)
 hidden_3 = tf.nn.relu(tf.matmul(mu_net_layer, w3) + b3)
 Q_net_output = tf.matmul(hidden_3, w4) + b4   #removed squeeze b/c i removed Q prime squeeze
-Q_net = tf.nn.max_pool(Q_net_output)
+Q_net = tf.nn.max_pool(Q_net_output, [1, 2, 2, 1], [1, 2, 2, 1], 'SAME')
 
 #TODO: match prime to primary config
 hidden_1p = tf.nn.relu(tf.matmul(prev_states, w1p) + b1p)
@@ -97,8 +97,8 @@ Qp_net = tf.matmul(hidden_3p, w4p) + b4p     #removed squeeze b/c that was killi
 
 # env.action_space.n are the actions available for this scenario (left right up down etc.)
 # action used is the list of actions already taken, when one hot is used it takes the action index number and turns it into an array [wtf does it actually mean]
-actions_used = tf.placeholder(tf.int32, [None])
-action_masks = tf.one_hot(actions_used, env.action_space.n)  
+actions_used = tf.placeholder(tf.float32, [None])
+action_masks = tf.one_hot(actions_used, action_space_range)  
 
 #i think filtered q is the list of actions taken previously with all the actions we didnt take removed 
 #  take the action masks (which indicate the actions taken up to now?) so:
@@ -176,7 +176,7 @@ with tf.Session() as sess:
                 action = env.action_space.sample()
             else:
                 y, mu = sess.run([Q_net, mu_net], feed_dict={prev_states: np.array([state])})[0]    #not sure why we need [0] at the end
-                action = np.argmax(mu)
+                action = np.random.randn(action_space_range * np.argmax(mu))
                 #print action
             
             # update the running exploration probability but no less than the minimum
